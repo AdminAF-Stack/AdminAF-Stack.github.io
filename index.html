@@ -200,7 +200,7 @@
             background: #010409; border-bottom: 1px solid var(--border); overflow: hidden;
             white-space: nowrap; padding: 0.5rem 0; font-size: 0.9rem;
         }
-        .ticker-content { display: inline-block; animation: scroll 60s linear infinite; padding-left: 100%; }
+        .ticker-content { display: inline-block; animation: scroll 120s linear infinite; padding-left: 100%; }
         @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
         .ticker a { color: var(--accent); text-decoration: none; margin: 0 1.5rem; }
         @media (max-width: 600px) {
@@ -250,8 +250,15 @@
             </div>
         </div>
 
+        <div class="section cyber">
+            <h2>Cybersecurity & Vulnerabilities</h2>
+            <div class="feed" id="cyberFeed">
+                <div class="loading">Loading cybersecurity feeds...</div>
+            </div>
+        </div>
+
         <div class="section msp">
-            <h2>MSP / Service Manager Daily</h2>
+            <h2>MSP / Service Daily</h2>
             <div class="feed" id="mspFeed">
                 <div class="loading">Loading MSP-relevant updates...</div>
             </div>
@@ -261,13 +268,6 @@
             <h2>Darkweb & Underground</h2>
             <div class="feed" id="darkwebFeed">
                 <div class="loading">Loading darkweb news...</div>
-            </div>
-        </div>
-
-        <div class="section cyber">
-            <h2>Cybersecurity & Vulnerabilities</h2>
-            <div class="feed" id="cyberFeed">
-                <div class="loading">Loading cybersecurity feeds...</div>
             </div>
         </div>
 
@@ -290,15 +290,15 @@
 
         const feeds = {
             msp: [
-                { name: 'r/msp', url: 'https://www.reddit.com/r/msp/.rss' },
-                { name: 'r/sysadmin', url: 'https://www.reddit.com/r/sysadmin/.rss' },
-                { name: 'Microsoft Admin Center Status', url: 'https://status.office365.com/api/feed/mac', isStatus: true },
                 { name: 'Microsoft 365 Roadmap', url: 'https://www.microsoft.com/releasecommunications/api/v2/m365/rss' },
-                { name: 'Microsoft Security Blog', url: 'https://www.microsoft.com/en-us/security/blog/feed/' }
+                { name: 'Microsoft Security Blog', url: 'https://www.microsoft.com/en-us/security/blog/feed/' },
+                { name: 'Practical 365', url: 'https://practical365.com/feed/' },
+                { name: 'Petri IT Knowledgebase', url: 'https://petri.com/feed/' },
+                { name: 'Microsoft Admin Center Status', url: 'https://status.office365.com/api/feed/mac', isStatus: true }
             ],
             darkweb: [
                 { name: 'Dark Reading', url: 'https://www.darkreading.com/rss.xml' },
-                { name: 'BleepingComputer', url: 'https://www.bleepingcomputer.com/feed/' },
+                { name: 'SecurityWeek', url: 'https://www.securityweek.com/feed/' },
                 { name: 'Krebs on Security', url: 'https://krebsonsecurity.com/feed/' }
             ],
             cyber: [
@@ -318,7 +318,6 @@
         const statusServices = [
             { name: 'Cloudflare', url: 'https://www.cloudflarestatus.com/', api: 'https://www.cloudflarestatus.com/api/v2/summary.json' },
             { name: 'GitHub', url: 'https://www.githubstatus.com/', api: 'https://www.githubstatus.com/api/v2/summary.json' },
-            { name: 'Slack', url: 'https://status.slack.com/', api: 'https://status.slack.com/api/v2/summary.json' },
             { name: 'Zoom', url: 'https://status.zoom.us/', api: 'https://status.zoom.us/api/v2/summary.json' },
             { name: 'Atlassian', url: 'https://status.atlassian.com/', api: 'https://status.atlassian.com/api/v2/summary.json' },
             { name: 'Okta', url: 'https://status.okta.com/', api: 'https://status.okta.com/api/v2/summary.json' },
@@ -450,12 +449,25 @@
         async function checkStatus(service) {
             if (!service.api) return 'unknown';
             try {
-                const res = await fetch(service.api);
-                if (!res.ok) return 'unknown';
+                // Try direct first
+                let res = await fetch(service.api);
+                if (!res.ok) throw new Error('direct failed');
                 const data = await res.json();
                 const indicator = data.status?.indicator || '';
                 return indicatorToClass(indicator);
-            } catch { return 'unknown'; }
+            } catch {
+                // Fallback through CORS proxy
+                try {
+                    const proxied = RSS_PROXY + encodeURIComponent(service.api);
+                    const res = await fetch(proxied);
+                    if (!res.ok) return 'unknown';
+                    const data = await res.json();
+                    const indicator = data.status?.indicator || '';
+                    return indicatorToClass(indicator);
+                } catch {
+                    return 'unknown';
+                }
+            }
         }
 
         async function loadStatuses() {
@@ -509,31 +521,38 @@
 
             await Promise.all([loadCrypto(), loadStatuses()]);
 
+            // Fetch all feeds in parallel
+            const mspPromises = feeds.msp.map(feed => fetchFeed(feed).then(items => ({ feed, items })));
+            const darkPromises = feeds.darkweb.map(feed => fetchFeed(feed).then(items => ({ feed, items })));
+            const cyberPromises = feeds.cyber.map(feed => fetchFeed(feed).then(items => ({ feed, items })));
+            const techPromises = feeds.tech.map(feed => fetchFeed(feed).then(items => ({ feed, items })));
+
+            const [mspResults, darkResults, cyberResults, techResults] = await Promise.all([
+                Promise.all(mspPromises),
+                Promise.all(darkPromises),
+                Promise.all(cyberPromises),
+                Promise.all(techPromises)
+            ]);
+
             const allMsp = [];
             const allDark = [];
             const allCyber = [];
             const allTech = [];
             const allItems = [];
 
-            for (const feed of feeds.msp) {
-                const items = await fetchFeed(feed);
+            for (const { feed, items } of mspResults) {
                 allMsp.push(...items);
-                if (!feed.isStatus) {
-                    allItems.push(...items);
-                }
+                if (!feed.isStatus) allItems.push(...items);
             }
-            for (const feed of feeds.darkweb) {
-                const items = await fetchFeed(feed);
+            for (const { items } of darkResults) {
                 allDark.push(...items);
                 allItems.push(...items);
             }
-            for (const feed of feeds.cyber) {
-                const items = await fetchFeed(feed);
+            for (const { items } of cyberResults) {
                 allCyber.push(...items);
                 allItems.push(...items);
             }
-            for (const feed of feeds.tech) {
-                const items = await fetchFeed(feed);
+            for (const { items } of techResults) {
                 allTech.push(...items);
                 allItems.push(...items);
             }
