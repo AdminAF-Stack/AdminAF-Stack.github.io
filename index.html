@@ -352,14 +352,16 @@
         }
 
         async function fetchFeed(feed) {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout
             try {
-                const res = await fetch(RSS_PROXY + encodeURIComponent(feed.url));
+                const res = await fetch(RSS_PROXY + encodeURIComponent(feed.url), { signal: controller.signal });
+                clearTimeout(timeout);
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const xmlText = await res.text();
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(xmlText, 'text/xml');
 
-                // Handle both RSS and Atom
                 let items = [];
                 const rssItems = doc.querySelectorAll('item');
                 if (rssItems.length) {
@@ -384,6 +386,7 @@
                 }
                 return items;
             } catch (err) {
+                clearTimeout(timeout);
                 console.error('Feed error:', feed.name, err);
                 return [];
             }
@@ -519,60 +522,41 @@
             btn.textContent = 'Loading...';
             btn.disabled = true;
 
+            // Crypto + statuses first (fast)
             await Promise.all([loadCrypto(), loadStatuses()]);
 
-            // Fetch all feeds in parallel
-            const mspPromises = feeds.msp.map(feed => fetchFeed(feed).then(items => ({ feed, items })));
-            const darkPromises = feeds.darkweb.map(feed => fetchFeed(feed).then(items => ({ feed, items })));
-            const cyberPromises = feeds.cyber.map(feed => fetchFeed(feed).then(items => ({ feed, items })));
-            const techPromises = feeds.tech.map(feed => fetchFeed(feed).then(items => ({ feed, items })));
-
-            const [mspResults, darkResults, cyberResults, techResults] = await Promise.all([
-                Promise.all(mspPromises),
-                Promise.all(darkPromises),
-                Promise.all(cyberPromises),
-                Promise.all(techPromises)
-            ]);
-
-            const allMsp = [];
-            const allDark = [];
-            const allCyber = [];
-            const allTech = [];
             const allItems = [];
 
-            for (const { feed, items } of mspResults) {
-                allMsp.push(...items);
-                if (!feed.isStatus) allItems.push(...items);
-            }
-            for (const { items } of darkResults) {
-                allDark.push(...items);
-                allItems.push(...items);
-            }
-            for (const { items } of cyberResults) {
-                allCyber.push(...items);
-                allItems.push(...items);
-            }
-            for (const { items } of techResults) {
-                allTech.push(...items);
-                allItems.push(...items);
+            // Helper to load and render one section as soon as it's ready
+            async function loadSection(feedList, containerId, maxCards, isMsp = false) {
+                const results = await Promise.all(feedList.map(feed => fetchFeed(feed).then(items => ({ feed, items }))));
+                const sectionItems = [];
+                for (const { feed, items } of results) {
+                    sectionItems.push(...items);
+                    if (!isMsp || !feed.isStatus) allItems.push(...items);
+                }
+                sectionItems.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+                renderCards(containerId, sectionItems.slice(0, maxCards));
+                return sectionItems;
             }
 
+            // Fire all sections in parallel and render each as it finishes
+            const sectionPromises = [
+                loadSection(feeds.cyber, 'cyberFeed', 15),
+                loadSection(feeds.msp, 'mspFeed', 12, true),
+                loadSection(feeds.darkweb, 'darkwebFeed', 12),
+                loadSection(feeds.tech, 'techFeed', 12)
+            ];
+
+            await Promise.all(sectionPromises);
+
+            // Top 5 + ticker after everything (or as soon as we have items)
             const allSorted = [...allItems].sort((a, b) => {
                 const da = new Date(a.rawDate || 0);
                 const db = new Date(b.rawDate || 0);
                 return db - da;
             });
-
-            allMsp.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-            allDark.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-            allCyber.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-            allTech.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-
             renderTopStories(allSorted.slice(0, 5));
-            renderCards('mspFeed', allMsp.slice(0, 12));
-            renderCards('darkwebFeed', allDark.slice(0, 12));
-            renderCards('cyberFeed', allCyber.slice(0, 15));
-            renderCards('techFeed', allTech.slice(0, 12));
             updateTicker(allItems);
 
             document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
@@ -583,6 +567,13 @@
         loadAll();
         setInterval(loadCrypto, 60000);
         setInterval(loadAll, 15 * 60 * 1000);
+
+        // Register Service Worker for faster repeat loads
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err));
+            });
+        }
     </script>
 </body>
 </html>
