@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AdminAF – Section</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --card: #161b22;
+            --text: #e6edf3;
+            --muted: #8b949e;
+            --accent: #58a6ff;
+            --border: #30363d;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg); color: var(--text);
+            line-height: 1.5;
+        }
+        header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+            background: #010409;
+        }
+        header a { color: var(--accent); text-decoration: none; font-size: 0.95rem; }
+        h1 { margin: 0; font-size: 1.4rem; }
+        .container { max-width: 1000px; margin: 0 auto; padding: 1.5rem; }
+        .feed { display: grid; gap: 1rem; }
+        .card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1rem 1.2rem;
+        }
+        .card h3 { margin: 0.3rem 0; font-size: 1.05rem; }
+        .card h3 a { color: var(--text); text-decoration: none; }
+        .card h3 a:hover { color: var(--accent); }
+        .meta { font-size: 0.8rem; color: var(--muted); }
+        .snippet { font-size: 0.9rem; color: #c9d1d9; margin-top: 0.4rem; }
+        .loading, .error { text-align: center; color: var(--muted); padding: 2rem; }
+        footer { text-align: center; padding: 1.5rem; color: var(--muted); font-size: 0.8rem; border-top: 1px solid var(--border); }
+    </style>
+</head>
+<body>
+    <header>
+        <h1 id="pageTitle">Loading...</h1>
+        <a href="/">← Back to Dashboard</a>
+    </header>
+
+    <div class="container">
+        <div class="feed" id="feed">
+            <div class="loading">Loading stories...</div>
+        </div>
+    </div>
+
+    <footer>AdminAF.com · Last 30 days of stories from this section</footer>
+
+    <script>
+        const RSS_PROXY = 'https://proxy.cors.dev/';
+        const feeds = {
+            msp: [
+                { name: 'Microsoft 365 Roadmap', url: 'https://www.microsoft.com/releasecommunications/api/v2/m365/rss' },
+                { name: 'Microsoft Security Blog', url: 'https://www.microsoft.com/en-us/security/blog/feed/' },
+                { name: 'Practical 365', url: 'https://practical365.com/feed/' },
+                { name: 'Petri IT Knowledgebase', url: 'https://petri.com/feed/' }
+            ],
+            darkweb: [
+                { name: 'Dark Reading', url: 'https://www.darkreading.com/rss.xml' },
+                { name: 'SecurityWeek', url: 'https://www.securityweek.com/feed/' },
+                { name: 'Krebs on Security', url: 'https://krebsonsecurity.com/feed/' }
+            ],
+            cyber: [
+                { name: 'The Hacker News', url: 'https://thehackernews.com/feeds/posts/default?alt=rss' },
+                { name: 'CISA Advisories', url: 'https://www.cisa.gov/cybersecurity-advisories/all.xml' },
+                { name: 'CISA Alerts (KEV)', url: 'https://www.cisa.gov/cybersecurity-advisories/alerts.xml' },
+                { name: 'Cybersecurity News', url: 'https://cybersecuritynews.com/feed/' }
+            ],
+            tech: [
+                { name: 'Hacker News', url: 'https://hnrss.org/frontpage' },
+                { name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
+                { name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml' },
+                { name: 'Ars Technica', url: 'https://arstechnica.com/feed/' }
+            ]
+        };
+
+        const titles = {
+            cyber: 'Cybersecurity & Vulnerabilities',
+            msp: 'MSP / Service Daily',
+            darkweb: 'Threat Intel',
+            tech: 'Tech News'
+        };
+
+        function formatDate(dateStr) {
+            try {
+                const d = new Date(dateStr);
+                return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            } catch { return ''; }
+        }
+
+        function stripHtml(html) {
+            const tmp = document.createElement('div');
+            tmp.innerHTML = html || '';
+            return tmp.textContent || tmp.innerText || '';
+        }
+
+        async function fetchFeed(feed) {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 10000);
+            try {
+                const res = await fetch(RSS_PROXY + encodeURIComponent(feed.url), { signal: controller.signal });
+                clearTimeout(timeout);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const xmlText = await res.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(xmlText, 'text/xml');
+
+                let items = [];
+                const rssItems = doc.querySelectorAll('item');
+                if (rssItems.length) {
+                    items = Array.from(rssItems).slice(0, 20).map(item => ({
+                        title: item.querySelector('title')?.textContent || 'No title',
+                        link: item.querySelector('link')?.textContent || '#',
+                        date: formatDate(item.querySelector('pubDate')?.textContent || ''),
+                        snippet: stripHtml(item.querySelector('description')?.textContent || '').substring(0, 220) + '...',
+                        source: feed.name,
+                        rawDate: item.querySelector('pubDate')?.textContent || ''
+                    }));
+                } else {
+                    const atomEntries = doc.querySelectorAll('entry');
+                    items = Array.from(atomEntries).slice(0, 20).map(entry => ({
+                        title: entry.querySelector('title')?.textContent || 'No title',
+                        link: entry.querySelector('link')?.getAttribute('href') || '#',
+                        date: formatDate(entry.querySelector('updated')?.textContent || entry.querySelector('published')?.textContent || ''),
+                        snippet: stripHtml(entry.querySelector('summary')?.textContent || entry.querySelector('content')?.textContent || '').substring(0, 220) + '...',
+                        source: feed.name,
+                        rawDate: entry.querySelector('updated')?.textContent || entry.querySelector('published')?.textContent || ''
+                    }));
+                }
+                return items;
+            } catch (err) {
+                clearTimeout(timeout);
+                console.error('Feed error:', feed.name, err);
+                return [];
+            }
+        }
+
+        function isWithin30Days(dateStr) {
+            if (!dateStr) return true;
+            const d = new Date(dateStr);
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - 30);
+            return d >= cutoff;
+        }
+
+        async function loadSection() {
+            const params = new URLSearchParams(window.location.search);
+            const cat = params.get('cat') || 'cyber';
+            const title = titles[cat] || 'Stories';
+            document.getElementById('pageTitle').textContent = title;
+            document.title = 'AdminAF – ' + title;
+
+            const feedList = feeds[cat] || [];
+            if (!feedList.length) {
+                document.getElementById('feed').innerHTML = '<div class="error">Unknown section.</div>';
+                return;
+            }
+
+            const results = await Promise.all(feedList.map(feed => fetchFeed(feed)));
+            let allItems = results.flat().filter(item => isWithin30Days(item.rawDate));
+
+            allItems.sort((a, b) => new Date(b.rawDate || 0) - new Date(a.rawDate || 0));
+
+            const container = document.getElementById('feed');
+            if (!allItems.length) {
+                container.innerHTML = '<div class="error">No stories found in the last 30 days.</div>';
+                return;
+            }
+
+            container.innerHTML = allItems.slice(0, 40).map(item => `
+                <div class="card">
+                    <div class="meta">${item.source} · ${item.date}</div>
+                    <h3><a href="${item.link}" target="_blank" rel="noopener">${item.title}</a></h3>
+                    <div class="snippet">${item.snippet}</div>
+                </div>
+            `).join('');
+        }
+
+        loadSection();
+    </script>
+</body>
+</html>

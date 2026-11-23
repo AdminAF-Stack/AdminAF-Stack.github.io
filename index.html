@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AdminAF – Tech & Security News Dashboard</title>
+    <meta name="description" content="Personal dashboard for technology news, cybersecurity updates, Microsoft 365 service information, and IT industry headlines.">
+    <meta name="keywords" content="technology news, cybersecurity, IT, Microsoft 365, service status, tech dashboard">
+    <meta property="og:title" content="AdminAF – Tech & Security News Dashboard">
+    <meta property="og:description" content="Technology news, cybersecurity updates, and IT service information.">
+    <style>
+        :root {
+            --bg: #0d1117;
+            --card: #161b22;
+            --border: #30363d;
+            --text: #e6edf3;
+            --muted: #8b949e;
+            --accent: #58a6ff;
+            --danger: #f85149;
+            --success: #3fb950;
+            --warning: #d29922;
+            --orange: #db6d28;
+            --cyber: #ff6b6b;
+            --tech: #4ecdc4;
+            --crypto: #f0b90b;
+            --darkweb: #9b59b6;
+            --top: #e6b800;
+            --msp: #00a4ef;
+            --cert: #7c3aed;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+        }
+        header {
+            background: #010409;
+            border-bottom: 1px solid var(--border);
+            padding: 1.5rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        header h1 { margin: 0; font-size: 1.8rem; font-weight: 600; }
+        header p { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.95rem; }
+        .controls { display: flex; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap; }
+        button {
+            background: var(--card); color: var(--text); border: 1px solid var(--border);
+            padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem;
+        }
+        button:hover { background: #21262d; }
+
+        .crypto-ticker {
+            background: #010409;
+            border-bottom: 1px solid var(--border);
+            overflow: hidden;
+            white-space: nowrap;
+            padding: 0.4rem 0;
+            font-size: 0.85rem;
+        }
+        .crypto-ticker-content {
+            display: inline-block;
+            animation: cryptoScroll 40s linear infinite;
+            padding-left: 100%;
+        }
+        .crypto-ticker-content:hover { animation-play-state: paused; }
+        @keyframes cryptoScroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+        .crypto-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            margin: 0 1.25rem;
+        }
+        .crypto-item .symbol { font-weight: 600; color: var(--crypto); }
+        .crypto-item .price { font-variant-numeric: tabular-nums; }
+        .crypto-item .change.up { color: var(--success); }
+        .crypto-item .change.down { color: var(--danger); }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+        .section { margin-bottom: 2.5rem; }
+        .section h2 {
+            border-left: 4px solid var(--accent); padding-left: 0.75rem; margin: 0 0 1rem; font-size: 1.4rem;
+        }
+        .section.cyber h2 { border-color: var(--cyber); }
+        .section.tech h2 { border-color: var(--tech); }
+        .section.darkweb h2 { border-color: var(--darkweb); }
+        .section.top h2 { border-color: var(--top); }
+        .section.msp h2 { border-color: var(--msp); }
+        .section.cert h2 { border-color: var(--cert); }
+        .feed { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1rem; }
+        .card {
+            background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem;
+            transition: transform 0.15s, border-color 0.15s;
+        }
+        .card:hover { transform: translateY(-2px); border-color: var(--accent); }
+        .card h3 { margin: 0 0 0.5rem; font-size: 1rem; line-height: 1.3; }
+        .card h3 a { color: var(--text); text-decoration: none; }
+        .card h3 a:hover { color: var(--accent); }
+        .meta { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.5rem; }
+        .snippet {
+            font-size: 0.85rem; color: #c9d1d9;
+            display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+        }
+
+        .top-stories {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .top-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--top);
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            transition: transform 0.15s;
+        }
+        .top-card:hover { transform: translateX(4px); border-color: var(--top); }
+        .top-card .rank {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--top);
+            margin-right: 0.75rem;
+            float: left;
+            line-height: 1;
+        }
+        .top-card h3 { margin: 0 0 0.35rem; font-size: 1.05rem; }
+        .top-card h3 a { color: var(--text); text-decoration: none; }
+        .top-card h3 a:hover { color: var(--accent); }
+        .top-card .meta { font-size: 0.75rem; }
+
+        /* Cert paths */
+        .cert-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+        .cert-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.1rem;
+            transition: transform 0.15s, border-color 0.15s;
+        }
+        .cert-card:hover { transform: translateY(-2px); border-color: var(--cert); }
+        .cert-card h3 { margin: 0 0 0.5rem; font-size: 1.05rem; color: var(--cert); }
+        .cert-card p { margin: 0 0 0.75rem; font-size: 0.85rem; color: var(--muted); }
+        .cert-card a {
+            display: inline-block;
+            background: var(--cert);
+            color: #fff;
+            text-decoration: none;
+            padding: 0.4rem 0.8rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .cert-card a:hover { filter: brightness(1.1); }
+        .cert-card .path { font-size: 0.8rem; color: var(--text); margin-top: 0.5rem; }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 0.4rem;
+            margin-top: 0.5rem;
+        }
+        .status-btn {
+            display: block; text-align: center; padding: 0.35rem 0.3rem; border-radius: 4px;
+            text-decoration: none; font-size: 0.75rem; font-weight: 500; border: 1px solid transparent;
+            transition: all 0.2s; line-height: 1.2;
+        }
+        .status-btn small { display: block; font-size: 0.65rem; opacity: 0.9; }
+        .status-btn.good { background: #238636; color: #fff; }
+        .status-btn.mild { background: #9e6a03; color: #fff; }
+        .status-btn.major { background: #bc4c00; color: #fff; }
+        .status-btn.down { background: #da3633; color: #fff; }
+        .status-btn.unknown { background: var(--card); color: var(--muted); border-color: var(--border); }
+        .status-btn:hover { filter: brightness(1.1); }
+
+        .legend {
+            display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.75rem; color: var(--muted); margin-top: 0.6rem;
+        }
+        .legend span::before {
+            content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 0.3rem;
+        }
+        .legend .good::before { background: #238636; }
+        .legend .mild::before { background: #9e6a03; }
+        .legend .major::before { background: #bc4c00; }
+        .legend .down::before { background: #da3633; }
+
+        .loading, .error { grid-column: 1 / -1; text-align: center; padding: 2rem; color: var(--muted); }
+        .error { color: var(--danger); }
+        footer {
+            text-align: center; padding: 2rem; color: var(--muted); font-size: 0.85rem;
+            border-top: 1px solid var(--border); margin-top: 2rem;
+        }
+        .ticker {
+            background: #010409; border-bottom: 1px solid var(--border); overflow: hidden;
+            white-space: nowrap; padding: 0.5rem 0; font-size: 0.9rem;
+        }
+        .ticker-content { display: inline-block; animation: scroll 120s linear infinite; padding-left: 100%; }
+        @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+        .ticker a { color: var(--accent); text-decoration: none; margin: 0 1.5rem; }
+        @media (max-width: 600px) {
+            header { padding: 1rem; }
+            .container { padding: 1rem; }
+            .feed { grid-template-columns: 1fr; }
+            .status-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
+            .cert-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="controls">
+            <button onclick="loadAll()" id="refreshBtn">Refresh Everything</button>
+            <span id="lastUpdated" style="align-self:center; color:var(--muted); font-size:0.85rem;"></span>
+        </div>
+    </header>
+
+    <div class="crypto-ticker" id="cryptoTicker">
+        <div class="crypto-ticker-content" id="cryptoContent">Loading crypto prices...</div>
+    </div>
+
+    <div class="ticker" id="ticker">
+        <div class="ticker-content" id="tickerContent">Loading latest headlines...</div>
+    </div>
+
+    <div class="container">
+        <div class="section">
+            <h2>Service Status</h2>
+            <div class="status-grid" id="statusGrid"></div>
+            <div class="legend">
+                <span class="good">Good</span>
+                <span class="mild">Mild</span>
+                <span class="major">Major</span>
+                <span class="down">Down</span>
+            </div>
+            <p style="font-size:0.75rem; color:var(--muted); margin-top:0.4rem;">
+                Live status colors from official APIs. Click for full page.
+            </p>
+        </div>
+
+        <div class="section top">
+            <h2>Top 5 Stories</h2>
+            <div class="top-stories" id="topStories">
+                <div class="loading">Loading top stories...</div>
+            </div>
+        </div>
+
+        <div class="section cyber">
+            <h2><a href="section.html?cat=cyber" style="color:inherit; text-decoration:none;">Cybersecurity & Vulnerabilities →</a></h2>
+            <div class="feed" id="cyberFeed">
+                <div class="loading">Loading cybersecurity feeds...</div>
+            </div>
+        </div>
+
+        <div class="section msp">
+            <h2><a href="section.html?cat=msp" style="color:inherit; text-decoration:none;">MSP / Service Daily →</a></h2>
+            <div class="feed" id="mspFeed">
+                <div class="loading">Loading MSP-relevant updates...</div>
+            </div>
+        </div>
+
+        <div class="section darkweb">
+            <h2><a href="section.html?cat=darkweb" style="color:inherit; text-decoration:none;">Threat Intel →</a></h2>
+            <div class="feed" id="darkwebFeed">
+                <div class="loading">Loading darkweb news...</div>
+            </div>
+        </div>
+
+        <div class="section tech">
+            <h2><a href="section.html?cat=tech" style="color:inherit; text-decoration:none;">Tech News →</a></h2>
+            <div class="feed" id="techFeed">
+                <div class="loading">Loading tech news...</div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        AdminAF.com · Client-side aggregator · Crypto via CoinGecko · MSP: Microsoft status, roadmap, security<br>
+        Status checks use public Statuspage APIs. No data is stored.
+    </footer>
+
+    <script>
+        const RSS_PROXY = 'https://proxy.cors.dev/';
+        const COINGECKO = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,zcash,monero,internet-computer&vs_currencies=usd&include_24hr_change=true';
+
+        const feeds = {
+            msp: [
+                { name: 'Microsoft 365 Roadmap', url: 'https://www.microsoft.com/releasecommunications/api/v2/m365/rss' },
+                { name: 'Microsoft Security Blog', url: 'https://www.microsoft.com/en-us/security/blog/feed/' },
+                { name: 'Practical 365', url: 'https://practical365.com/feed/' },
+                { name: 'Petri IT Knowledgebase', url: 'https://petri.com/feed/' },
+                { name: 'Microsoft Admin Center Status', url: 'https://status.office365.com/api/feed/mac', isStatus: true }
+            ],
+            darkweb: [
+                { name: 'Dark Reading', url: 'https://www.darkreading.com/rss.xml' },
+                { name: 'SecurityWeek', url: 'https://www.securityweek.com/feed/' },
+                { name: 'Krebs on Security', url: 'https://krebsonsecurity.com/feed/' }
+            ],
+            cyber: [
+                { name: 'The Hacker News', url: 'https://thehackernews.com/feeds/posts/default?alt=rss' },
+                { name: 'CISA Advisories', url: 'https://www.cisa.gov/cybersecurity-advisories/all.xml' },
+                { name: 'CISA Alerts (KEV)', url: 'https://www.cisa.gov/cybersecurity-advisories/alerts.xml' },
+                { name: 'Cybersecurity News', url: 'https://cybersecuritynews.com/feed/' }
+            ],
+            tech: [
+                { name: 'Hacker News', url: 'https://hnrss.org/frontpage' },
+                { name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
+                { name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml' },
+                { name: 'Ars Technica', url: 'https://arstechnica.com/feed/' }
+            ]
+        };
+
+        const statusServices = [
+            { name: 'Cloudflare', url: 'https://www.cloudflarestatus.com/', api: 'https://www.cloudflarestatus.com/api/v2/summary.json' },
+            { name: 'GitHub', url: 'https://www.githubstatus.com/', api: 'https://www.githubstatus.com/api/v2/summary.json' },
+            { name: 'Zoom', url: 'https://status.zoom.us/', api: 'https://status.zoom.us/api/v2/summary.json' },
+            { name: 'Atlassian', url: 'https://status.atlassian.com/', api: 'https://status.atlassian.com/api/v2/summary.json' },
+            { name: 'Okta', url: 'https://status.okta.com/', api: 'https://status.okta.com/api/v2/summary.json' },
+            { name: 'Dropbox', url: 'https://status.dropbox.com/', api: 'https://status.dropbox.com/api/v2/summary.json' },
+            { name: 'DigitalOcean', url: 'https://status.digitalocean.com/', api: 'https://status.digitalocean.com/api/v2/summary.json' },
+            { name: 'AWS', url: 'https://health.aws.amazon.com/health/status', api: null },
+            { name: 'Azure', url: 'https://status.azure.com/', api: null },
+            { name: 'Microsoft 365', url: 'https://status.office.com/', api: null },
+            { name: 'Google Cloud', url: 'https://status.cloud.google.com/', api: null },
+            { name: 'Downdetector', url: 'https://downdetector.com/', api: null }
+        ];
+
+        const cryptoSymbols = {
+            bitcoin: 'BTC',
+            ethereum: 'ETH',
+            zcash: 'ZEC',
+            monero: 'XMR',
+            'internet-computer': 'ICP'
+        };
+
+        function formatDate(dateStr) {
+            try {
+                const d = new Date(dateStr);
+                return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            } catch { return ''; }
+        }
+
+        function stripHtml(html) {
+            const tmp = document.createElement('div');
+            tmp.innerHTML = html || '';
+            return tmp.textContent || tmp.innerText || '';
+        }
+
+        async function fetchFeed(feed) {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout
+            try {
+                const res = await fetch(RSS_PROXY + encodeURIComponent(feed.url), { signal: controller.signal });
+                clearTimeout(timeout);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const xmlText = await res.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(xmlText, 'text/xml');
+
+                let items = [];
+                const rssItems = doc.querySelectorAll('item');
+                if (rssItems.length) {
+                    items = Array.from(rssItems).slice(0, 5).map(item => ({
+                        title: item.querySelector('title')?.textContent || 'No title',
+                        link: item.querySelector('link')?.textContent || '#',
+                        date: formatDate(item.querySelector('pubDate')?.textContent || ''),
+                        snippet: stripHtml(item.querySelector('description')?.textContent || '').substring(0, 180) + '...',
+                        source: feed.name,
+                        rawDate: item.querySelector('pubDate')?.textContent || ''
+                    }));
+                } else {
+                    const atomEntries = doc.querySelectorAll('entry');
+                    items = Array.from(atomEntries).slice(0, 5).map(entry => ({
+                        title: entry.querySelector('title')?.textContent || 'No title',
+                        link: entry.querySelector('link')?.getAttribute('href') || '#',
+                        date: formatDate(entry.querySelector('updated')?.textContent || entry.querySelector('published')?.textContent || ''),
+                        snippet: stripHtml(entry.querySelector('summary')?.textContent || entry.querySelector('content')?.textContent || '').substring(0, 180) + '...',
+                        source: feed.name,
+                        rawDate: entry.querySelector('updated')?.textContent || entry.querySelector('published')?.textContent || ''
+                    }));
+                }
+                return items;
+            } catch (err) {
+                clearTimeout(timeout);
+                console.error('Feed error:', feed.name, err);
+                return [];
+            }
+        }
+
+        function renderCards(containerId, items) {
+            const container = document.getElementById(containerId);
+            if (!items.length) {
+                container.innerHTML = '<div class="error">Unable to load feeds right now. Try refreshing.</div>';
+                return;
+            }
+            container.innerHTML = items.map(item => `
+                <div class="card">
+                    <div class="meta">${item.source} · ${item.date}</div>
+                    <h3><a href="${item.link}" target="_blank" rel="noopener">${item.title}</a></h3>
+                    <div class="snippet">${item.snippet}</div>
+                </div>
+            `).join('');
+        }
+
+        function renderTopStories(items) {
+            const container = document.getElementById('topStories');
+            if (!items.length) {
+                container.innerHTML = '<div class="error">No top stories available.</div>';
+                return;
+            }
+            container.innerHTML = items.map((item, i) => `
+                <div class="top-card">
+                    <span class="rank">${i + 1}</span>
+                    <div class="meta">${item.source} · ${item.date}</div>
+                    <h3><a href="${item.link}" target="_blank" rel="noopener">${item.title}</a></h3>
+                    <div class="snippet">${item.snippet}</div>
+                </div>
+            `).join('');
+        }
+
+        function updateTicker(items) {
+            const ticker = document.getElementById('tickerContent');
+            if (!items.length) {
+                ticker.textContent = 'No headlines available';
+                return;
+            }
+            const links = items.slice(0, 12).map(item => 
+                `<a href="${item.link}" target="_blank" rel="noopener">${item.source}: ${item.title}</a>`
+            ).join(' · ');
+            ticker.innerHTML = links + ' · ' + links;
+        }
+
+        function indicatorToClass(indicator) {
+            switch ((indicator || '').toLowerCase()) {
+                case 'none':
+                case 'operational': return 'good';
+                case 'minor':
+                case 'degraded_performance': return 'mild';
+                case 'major':
+                case 'partial_outage': return 'major';
+                case 'critical':
+                case 'major_outage': return 'down';
+                default: return 'unknown';
+            }
+        }
+
+        async function checkStatus(service) {
+            if (!service.api) return 'unknown';
+            try {
+                // Try direct first
+                let res = await fetch(service.api);
+                if (!res.ok) throw new Error('direct failed');
+                const data = await res.json();
+                const indicator = data.status?.indicator || '';
+                return indicatorToClass(indicator);
+            } catch {
+                // Fallback through CORS proxy
+                try {
+                    const proxied = RSS_PROXY + encodeURIComponent(service.api);
+                    const res = await fetch(proxied);
+                    if (!res.ok) return 'unknown';
+                    const data = await res.json();
+                    const indicator = data.status?.indicator || '';
+                    return indicatorToClass(indicator);
+                } catch {
+                    return 'unknown';
+                }
+            }
+        }
+
+        async function loadStatuses() {
+            const grid = document.getElementById('statusGrid');
+            grid.innerHTML = statusServices.map(s => 
+                `<a href="${s.url}" target="_blank" rel="noopener" class="status-btn unknown" data-name="${s.name}">${s.name}<br><small>…</small></a>`
+            ).join('');
+
+            for (const service of statusServices) {
+                const cls = await checkStatus(service);
+                const btn = grid.querySelector(`[data-name="${service.name}"]`);
+                if (btn) {
+                    btn.className = `status-btn ${cls}`;
+                    const label = { good: 'Good', mild: 'Mild', major: 'Major', down: 'Down', unknown: 'Check' }[cls] || 'Check';
+                    btn.innerHTML = `${service.name}<br><small>${label}</small>`;
+                }
+            }
+        }
+
+        async function loadCrypto() {
+            try {
+                let res;
+                try {
+                    res = await fetch(COINGECKO);
+                    if (!res.ok) throw new Error('direct failed');
+                } catch {
+                    // Fallback through CORS proxy
+                    res = await fetch(RSS_PROXY + encodeURIComponent(COINGECKO));
+                    if (!res.ok) throw new Error('proxy failed');
+                }
+                const data = await res.json();
+                const content = document.getElementById('cryptoContent');
+
+                const order = ['bitcoin', 'ethereum', 'zcash', 'monero', 'internet-computer'];
+                let html = '';
+                for (const id of order) {
+                    const info = data[id];
+                    if (!info) continue;
+                    const price = info.usd ? '$' + info.usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+                    const change = info.usd_24h_change;
+                    const changeStr = change != null ? (change >= 0 ? '+' : '') + change.toFixed(2) + '%' : '';
+                    const changeClass = change >= 0 ? 'up' : 'down';
+                    const symbol = cryptoSymbols[id] || id.toUpperCase();
+
+                    html += `<span class="crypto-item"><span class="symbol">${symbol}</span> <span class="price">${price}</span> <span class="change ${changeClass}">${changeStr}</span></span>`;
+                }
+                content.innerHTML = html + html;
+            } catch (err) {
+                console.error('Crypto error:', err);
+                document.getElementById('cryptoContent').textContent = 'Crypto data unavailable';
+            }
+        }
+
+        async function loadAll() {
+            const btn = document.getElementById('refreshBtn');
+            btn.textContent = 'Loading...';
+            btn.disabled = true;
+
+            // Crypto + statuses first (fast)
+            await Promise.all([loadCrypto(), loadStatuses()]);
+
+            const allItems = [];
+
+            // Helper to load and render one section as soon as it's ready
+            async function loadSection(feedList, containerId, maxCards, isMsp = false) {
+                const results = await Promise.all(feedList.map(feed => fetchFeed(feed).then(items => ({ feed, items }))));
+                const sectionItems = [];
+                for (const { feed, items } of results) {
+                    sectionItems.push(...items);
+                    if (!isMsp || !feed.isStatus) allItems.push(...items);
+                }
+                sectionItems.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+                renderCards(containerId, sectionItems.slice(0, maxCards));
+                return sectionItems;
+            }
+
+            // Fire all sections in parallel and render each as it finishes
+            const sectionPromises = [
+                loadSection(feeds.cyber, 'cyberFeed', 15),
+                loadSection(feeds.msp, 'mspFeed', 12, true),
+                loadSection(feeds.darkweb, 'darkwebFeed', 12),
+                loadSection(feeds.tech, 'techFeed', 12)
+            ];
+
+            await Promise.all(sectionPromises);
+
+            // Top 5 + ticker after everything (or as soon as we have items)
+            const allSorted = [...allItems].sort((a, b) => {
+                const da = new Date(a.rawDate || 0);
+                const db = new Date(b.rawDate || 0);
+                return db - da;
+            });
+            renderTopStories(allSorted.slice(0, 5));
+            updateTicker(allItems);
+
+            document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+            btn.textContent = 'Refresh Everything';
+            btn.disabled = false;
+        }
+
+        loadAll();
+        setInterval(loadCrypto, 60000);
+        setInterval(loadAll, 15 * 60 * 1000);
+
+        // Register Service Worker for faster repeat loads (fails silently in sandboxed previews)
+        if ('serviceWorker' in navigator) {
+            try {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/sw.js').catch(() => {});
+                });
+            } catch (e) {
+                // Sandboxed or restricted context — ignore
+            }
+        }
+    </script>
+</body>
+</html>
